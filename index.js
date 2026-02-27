@@ -6,6 +6,9 @@ const {
   REST,
   Routes,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
@@ -24,10 +27,7 @@ function loadAdmins() {
     return [];
   }
 }
-
-function isAdmin(userId) {
-  return loadAdmins().includes(userId);
-}
+function isAdmin(userId) { return loadAdmins().includes(userId); }
 
 // ===================== EXPRESS (UptimeRobot) =====================
 const app = express();
@@ -61,45 +61,54 @@ const commands = [
   new SlashCommandBuilder()
     .setName('role')
     .setDescription('Them role cho user (chi Admin)')
-    .addUserOption(opt =>
-      opt.setName('user').setDescription('Chon user').setRequired(true)
-    )
-    .addRoleOption(opt =>
-      opt.setName('role').setDescription('Chon role muon them').setRequired(true)
-    ),
+    .addUserOption(opt => opt.setName('user').setDescription('Chon user').setRequired(true))
+    .addRoleOption(opt => opt.setName('role').setDescription('Chon role muon them').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('addroles')
+    .setDescription('Them nhieu role cho user cung luc (chi Admin)')
+    .addUserOption(opt => opt.setName('user').setDescription('Chon user').setRequired(true))
+    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1').setRequired(true))
+    .addRoleOption(opt => opt.setName('role2').setDescription('Role 2').setRequired(false))
+    .addRoleOption(opt => opt.setName('role3').setDescription('Role 3').setRequired(false))
+    .addRoleOption(opt => opt.setName('role4').setDescription('Role 4').setRequired(false))
+    .addRoleOption(opt => opt.setName('role5').setDescription('Role 5').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('deleterole')
     .setDescription('Xoa role khoi user (chi Admin)')
-    .addUserOption(opt =>
-      opt.setName('user').setDescription('Chon user').setRequired(true)
-    )
-    .addRoleOption(opt =>
-      opt.setName('role').setDescription('Chon role muon xoa').setRequired(true)
-    ),
+    .addUserOption(opt => opt.setName('user').setDescription('Chon user').setRequired(true))
+    .addRoleOption(opt => opt.setName('role').setDescription('Chon role muon xoa').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('addrole')
     .setDescription('Tao role moi trong server (chi Admin)')
-    .addStringOption(opt =>
-      opt.setName('ten').setDescription('Ten cua role').setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName('mau')
-        .setDescription('Mau hex VD: #FF0000')
-        .setRequired(true)
-    ),
+    .addStringOption(opt => opt.setName('ten').setDescription('Ten cua role').setRequired(true))
+    .addStringOption(opt => opt.setName('mau').setDescription('Mau hex VD: #FF0000').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Xoa tin nhan trong kenh (chi Admin)')
     .addIntegerOption(opt =>
-      opt.setName('soluong')
-        .setDescription('So tin nhan muon xoa (1 - 100)')
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(100)
+      opt.setName('soluong').setDescription('So tin nhan muon xoa (1-100)').setRequired(true).setMinValue(1).setMaxValue(100)
     ),
+
+  // /setrole — tạo panel role reaction
+  new SlashCommandBuilder()
+    .setName('setrole')
+    .setDescription('Tao panel chon role bang nut bam (chi Admin)')
+    .addStringOption(opt => opt.setName('tieude').setDescription('Tiêu đề của panel VD: Chọn màu của bạn').setRequired(true))
+    .addStringOption(opt => opt.setName('mota').setDescription('Mô tả thêm (không bắt buộc)').setRequired(false))
+    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1').setRequired(true))
+    .addStringOption(opt => opt.setName('icon1').setDescription('Icon/emoji cho role 1 VD: 🔴').setRequired(true))
+    .addRoleOption(opt => opt.setName('role2').setDescription('Role 2').setRequired(false))
+    .addStringOption(opt => opt.setName('icon2').setDescription('Icon/emoji cho role 2').setRequired(false))
+    .addRoleOption(opt => opt.setName('role3').setDescription('Role 3').setRequired(false))
+    .addStringOption(opt => opt.setName('icon3').setDescription('Icon/emoji cho role 3').setRequired(false))
+    .addRoleOption(opt => opt.setName('role4').setDescription('Role 4').setRequired(false))
+    .addStringOption(opt => opt.setName('icon4').setDescription('Icon/emoji cho role 4').setRequired(false))
+    .addRoleOption(opt => opt.setName('role5').setDescription('Role 5').setRequired(false))
+    .addStringOption(opt => opt.setName('icon5').setDescription('Icon/emoji cho role 5').setRequired(false)),
 
 ].map(cmd => cmd.toJSON());
 
@@ -117,6 +126,40 @@ client.once('ready', async () => {
 
 // ===================== SLASH COMMAND HANDLER =====================
 client.on('interactionCreate', async (interaction) => {
+
+  // ===== BUTTON CLICK (setrole panel) =====
+  if (interaction.isButton() && interaction.customId.startsWith('setrole_')) {
+    try {
+      // customId format: setrole_ROLEID
+      const roleId = interaction.customId.replace('setrole_', '');
+      const role = interaction.guild.roles.cache.get(roleId);
+
+      if (!role) {
+        return interaction.reply({ content: '❌ Role không tồn tại!', ephemeral: true });
+      }
+
+      const member = interaction.member;
+
+      if (member.roles.cache.has(roleId)) {
+        // Đã có role → bỏ role
+        await member.roles.remove(role);
+        return interaction.reply({
+          content: `✅ Đã bỏ role **${role.name}** khỏi bạn!`,
+          ephemeral: true
+        });
+      } else {
+        // Chưa có role → thêm role
+        await member.roles.add(role);
+        return interaction.reply({
+          content: `✅ Đã thêm role **${role.name}** cho bạn!`,
+          ephemeral: true
+        });
+      }
+    } catch (err) {
+      return interaction.reply({ content: `❌ Lỗi: ${err.message}`, ephemeral: true });
+    }
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName, user, member, guild, channel } = interaction;
@@ -139,16 +182,17 @@ client.on('interactionCreate', async (interaction) => {
           value: [
             '`/lock` hoặc `.lock` — 🔒 Khóa kênh hiện tại',
             '`/unlock` hoặc `.unlock` — 🔓 Mở khóa kênh hiện tại',
-            '`/role @user @role` — ➕ Thêm role cho thành viên',
+            '`/role @user @role` — ➕ Thêm 1 role cho thành viên',
+            '`/addroles @user @role1 @role2...` — ➕ Thêm nhiều role cùng lúc',
             '`/deleterole @user @role` — 🗑️ Xóa role khỏi thành viên',
             '`/addrole [tên] [màu]` — 🎨 Tạo role mới',
             '`/clear [số lượng]` — 🧹 Xóa tin nhắn trong kênh',
+            '`/setrole [tiêu đề] [role] [icon]...` — 🎭 Tạo panel chọn role',
           ].join('\n'),
         }
       )
       .setFooter({ text: 'Chỉ Admin mới dùng được lệnh có khóa 🔐' })
       .setTimestamp();
-
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
@@ -159,13 +203,10 @@ client.on('interactionCreate', async (interaction) => {
     }
     try {
       await channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: false,
-        AddReactions: false,
-        SendMessagesInThreads: false,
+        SendMessages: false, AddReactions: false, SendMessagesInThreads: false,
       });
       const embed = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle('🔒 Kênh đã bị khóa')
+        .setColor(0xFF0000).setTitle('🔒 Kênh đã bị khóa')
         .setDescription(`Kênh **#${channel.name}** đã bị khóa bởi ${user}\nMọi người không thể nhắn tin cho đến khi được mở khóa.`)
         .setTimestamp();
       interaction.reply({ embeds: [embed] });
@@ -181,13 +222,10 @@ client.on('interactionCreate', async (interaction) => {
     }
     try {
       await channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: null,
-        AddReactions: null,
-        SendMessagesInThreads: null,
+        SendMessages: null, AddReactions: null, SendMessagesInThreads: null,
       });
       const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('🔓 Kênh đã được mở khóa')
+        .setColor(0x00FF00).setTitle('🔓 Kênh đã được mở khóa')
         .setDescription(`Kênh **#${channel.name}** đã được mở khóa bởi ${user}\nMọi người có thể nhắn tin bình thường!`)
         .setTimestamp();
       interaction.reply({ embeds: [embed] });
@@ -196,30 +234,23 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // -------- /role @user @role --------
+  // -------- /role --------
   if (commandName === 'role') {
     if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
       return interaction.reply({ content: '❌ Bạn không có quyền thêm role!', ephemeral: true });
     }
     const targetUser = interaction.options.getMember('user');
     const targetRole = interaction.options.getRole('role');
-
     if (!targetUser || !targetRole) {
       return interaction.reply({ content: '❌ Không tìm thấy user hoặc role!', ephemeral: true });
     }
-
     if (targetUser.roles.cache.has(targetRole.id)) {
-      return interaction.reply({
-        content: `❌ **${targetUser.user.username}** đã có role **${targetRole.name}** rồi!`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: `❌ **${targetUser.user.username}** đã có role **${targetRole.name}** rồi!`, ephemeral: true });
     }
-
     try {
       await targetUser.roles.add(targetRole);
       const embed = new EmbedBuilder()
-        .setColor(targetRole.color || 0x5865F2)
-        .setTitle('✅ Đã thêm Role')
+        .setColor(targetRole.color || 0x5865F2).setTitle('✅ Đã thêm Role')
         .setDescription(`Đã thêm role **${targetRole.name}** cho ${targetUser.user}\nThực hiện bởi: ${user}`)
         .setTimestamp();
       interaction.reply({ embeds: [embed] });
@@ -228,30 +259,75 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // -------- /deleterole @user @role --------
+  // -------- /addroles (nhiều role cùng lúc) --------
+  if (commandName === 'addroles') {
+    if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      return interaction.reply({ content: '❌ Bạn không có quyền thêm role!', ephemeral: true });
+    }
+
+    const targetUser = interaction.options.getMember('user');
+    if (!targetUser) {
+      return interaction.reply({ content: '❌ Không tìm thấy user!', ephemeral: true });
+    }
+
+    // Lấy tất cả role được chọn (role1 → role5)
+    const rolesToAdd = [];
+    for (let i = 1; i <= 5; i++) {
+      const r = interaction.options.getRole(`role${i}`);
+      if (r) rolesToAdd.push(r);
+    }
+
+    if (rolesToAdd.length === 0) {
+      return interaction.reply({ content: '❌ Chưa chọn role nào!', ephemeral: true });
+    }
+
+    await interaction.deferReply();
+
+    const added = [], skipped = [], failed = [];
+
+    for (const r of rolesToAdd) {
+      if (targetUser.roles.cache.has(r.id)) {
+        skipped.push(r.name);
+      } else {
+        try {
+          await targetUser.roles.add(r);
+          added.push(r.name);
+        } catch {
+          failed.push(r.name);
+        }
+      }
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('➕ Kết quả thêm nhiều Role')
+      .setDescription(`Thành viên: ${targetUser.user}`)
+      .setTimestamp();
+
+    if (added.length > 0)   embed.addFields({ name: '✅ Đã thêm', value: added.map(r => `**${r}**`).join(', '), inline: false });
+    if (skipped.length > 0) embed.addFields({ name: '⏭️ Đã có sẵn', value: skipped.map(r => `**${r}**`).join(', '), inline: false });
+    if (failed.length > 0)  embed.addFields({ name: '❌ Thất bại', value: failed.map(r => `**${r}**`).join(', '), inline: false });
+
+    interaction.editReply({ embeds: [embed] });
+  }
+
+  // -------- /deleterole --------
   if (commandName === 'deleterole') {
     if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
       return interaction.reply({ content: '❌ Bạn không có quyền xóa role!', ephemeral: true });
     }
     const targetUser = interaction.options.getMember('user');
     const targetRole = interaction.options.getRole('role');
-
     if (!targetUser || !targetRole) {
       return interaction.reply({ content: '❌ Không tìm thấy user hoặc role!', ephemeral: true });
     }
-
     if (!targetUser.roles.cache.has(targetRole.id)) {
-      return interaction.reply({
-        content: `❌ **${targetUser.user.username}** không có role **${targetRole.name}**!`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: `❌ **${targetUser.user.username}** không có role **${targetRole.name}**!`, ephemeral: true });
     }
-
     try {
       await targetUser.roles.remove(targetRole);
       const embed = new EmbedBuilder()
-        .setColor(0xFF6600)
-        .setTitle('🗑️ Đã xóa Role')
+        .setColor(0xFF6600).setTitle('🗑️ Đã xóa Role')
         .setDescription(`Đã xóa role **${targetRole.name}** khỏi ${targetUser.user}\nThực hiện bởi: ${user}`)
         .setTimestamp();
       interaction.reply({ embeds: [embed] });
@@ -260,112 +336,127 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // -------- /addrole [tên] [màu] --------
+  // -------- /addrole (tạo role mới) --------
   if (commandName === 'addrole') {
     if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
       return interaction.reply({ content: '❌ Bạn không có quyền tạo role!', ephemeral: true });
     }
-
-    const roleName = interaction.options.getString('ten');
+    const roleName  = interaction.options.getString('ten');
     const roleColor = interaction.options.getString('mau');
-
-    const hexRegex = /^#([0-9A-Fa-f]{6})$/;
+    const hexRegex  = /^#([0-9A-Fa-f]{6})$/;
     if (!hexRegex.test(roleColor)) {
-      return interaction.reply({
-        content: '❌ Màu không hợp lệ! Dùng định dạng hex VD: `#FF0000`',
-        ephemeral: true
-      });
+      return interaction.reply({ content: '❌ Màu không hợp lệ! VD: `#FF0000`', ephemeral: true });
     }
-
     const existingRole = guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
     if (existingRole) {
-      return interaction.reply({
-        content: `❌ Role **${roleName}** đã tồn tại rồi!`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: `❌ Role **${roleName}** đã tồn tại rồi!`, ephemeral: true });
     }
-
     try {
       const newRole = await guild.roles.create({
-        name: roleName,
-        color: roleColor,
+        name: roleName, color: roleColor,
         permissions: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory],
         reason: `Tao boi ${user.tag}`,
       });
-
       const embed = new EmbedBuilder()
-        .setColor(newRole.color)
-        .setTitle('🎨 Đã tạo Role mới')
+        .setColor(newRole.color).setTitle('🎨 Đã tạo Role mới')
         .addFields(
           { name: '📛 Tên', value: newRole.name, inline: true },
           { name: '🎨 Màu', value: roleColor, inline: true },
-          { name: '✅ Quyền mặc định', value: 'Xem kênh, Xem lịch sử tin nhắn', inline: false },
+          { name: '✅ Quyền', value: 'Xem kênh, Xem lịch sử tin nhắn', inline: false },
         )
-        .setFooter({ text: `Tao boi ${user.tag}` })
-        .setTimestamp();
-
+        .setFooter({ text: `Tao boi ${user.tag}` }).setTimestamp();
       interaction.reply({ embeds: [embed] });
     } catch (err) {
       interaction.reply({ content: `❌ Lỗi: ${err.message}`, ephemeral: true });
     }
   }
 
-  // -------- /clear [số lượng] --------
+  // -------- /clear --------
   if (commandName === 'clear') {
     if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageMessages)) {
       return interaction.reply({ content: '❌ Bạn không có quyền xóa tin nhắn!', ephemeral: true });
     }
-
     const amount = interaction.options.getInteger('soluong');
-
     try {
       await interaction.deferReply({ ephemeral: true });
-
       const messages = await channel.messages.fetch({ limit: amount });
-
-      // Discord chỉ cho bulk delete tin nhắn dưới 14 ngày
-      const deletable = messages.filter(msg => {
-        const age = Date.now() - msg.createdTimestamp;
-        return age < 14 * 24 * 60 * 60 * 1000;
-      });
-
+      const deletable = messages.filter(msg => Date.now() - msg.createdTimestamp < 14 * 24 * 60 * 60 * 1000);
       if (deletable.size === 0) {
-        return interaction.editReply('❌ Không có tin nhắn nào có thể xóa! Tin nhắn quá 14 ngày Discord không cho xóa hàng loạt.');
+        return interaction.editReply('❌ Không có tin nhắn nào xóa được! Tin nhắn quá 14 ngày Discord không cho xóa hàng loạt.');
       }
-
       await channel.bulkDelete(deletable, true);
-
       const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle('🧹 Đã xóa tin nhắn')
-        .setDescription(`Đã xóa **${deletable.size}** tin nhắn trong kênh **#${channel.name}**\nThực hiện bởi: ${user}`)
+        .setColor(0x5865F2).setTitle('🧹 Đã xóa tin nhắn')
+        .setDescription(`Đã xóa **${deletable.size}** tin nhắn trong **#${channel.name}**\nThực hiện bởi: ${user}`)
         .setTimestamp();
-
       const reply = await interaction.editReply({ embeds: [embed], ephemeral: false });
-
-      // Tự xóa thông báo sau 5 giây
-      setTimeout(async () => {
-        try { await reply.delete(); } catch {}
-      }, 5000);
-
+      setTimeout(async () => { try { await reply.delete(); } catch {} }, 5000);
     } catch (err) {
-      try {
-        interaction.editReply({ content: `❌ Lỗi: ${err.message}` });
-      } catch {}
+      try { interaction.editReply({ content: `❌ Lỗi: ${err.message}` }); } catch {}
     }
+  }
+
+  // -------- /setrole (tạo panel role) --------
+  if (commandName === 'setrole') {
+    if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      return interaction.reply({ content: '❌ Bạn không có quyền tạo panel role!', ephemeral: true });
+    }
+
+    const tieude = interaction.options.getString('tieude');
+    const mota   = interaction.options.getString('mota') || '';
+
+    // Gom các cặp role + icon
+    const pairs = [];
+    for (let i = 1; i <= 5; i++) {
+      const r    = interaction.options.getRole(`role${i}`);
+      const icon = interaction.options.getString(`icon${i}`);
+      if (r && icon) pairs.push({ role: r, icon });
+    }
+
+    if (pairs.length === 0) {
+      return interaction.reply({ content: '❌ Cần ít nhất 1 cặp role + icon!', ephemeral: true });
+    }
+
+    // Tạo embed panel
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(tieude)
+      .setDescription(
+        (mota ? mota + '\n\n' : '') +
+        '**Click vào nút bên dưới để nhận/bỏ role:**\n' +
+        pairs.map(p => `${p.icon} → **${p.role.name}**`).join('\n')
+      )
+      .setFooter({ text: 'Click lần nữa để bỏ role' })
+      .setTimestamp();
+
+    // Tạo buttons (tối đa 5 button / 1 row)
+    const row = new ActionRowBuilder();
+    pairs.forEach(p => {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`setrole_${p.role.id}`)
+          .setLabel(p.role.name)
+          .setEmoji(p.icon)
+          .setStyle(ButtonStyle.Primary)
+      );
+    });
+
+    await interaction.reply({
+      embeds: [embed],
+      components: [row]
+    });
   }
 });
 
 // ===================== PREFIX COMMAND HANDLER =====================
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-
   const content = message.content.trim();
-  const member = message.member;
-  const guild = message.guild;
+  const member  = message.member;
+  const guild   = message.guild;
   const channel = message.channel;
 
-  // -------- .name [tên] --------
+  // .name
   if (content.startsWith('.name ')) {
     const newName = content.slice(6).trim();
     if (!newName) return message.reply('❌ Vui lòng nhập tên! VD: `.name TênMới`');
@@ -378,50 +469,41 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // -------- .lock --------
+  // .lock
   if (content === '.lock') {
     if (!isAdmin(message.author.id) && !member.permissions.has(PermissionFlagsBits.ManageChannels)) {
       return message.reply('❌ Bạn không có quyền khóa kênh!');
     }
     try {
       await channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: false,
-        AddReactions: false,
-        SendMessagesInThreads: false,
+        SendMessages: false, AddReactions: false, SendMessagesInThreads: false,
       });
       const embed = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle('🔒 Kênh đã bị khóa')
+        .setColor(0xFF0000).setTitle('🔒 Kênh đã bị khóa')
         .setDescription(`Kênh **#${channel.name}** đã bị khóa bởi ${message.author}\nMọi người không thể nhắn tin cho đến khi được mở khóa.`)
         .setTimestamp();
       channel.send({ embeds: [embed] });
-    } catch (err) {
-      message.reply(`❌ Lỗi: ${err.message}`);
-    }
+    } catch (err) { message.reply(`❌ Lỗi: ${err.message}`); }
   }
 
-  // -------- .unlock --------
+  // .unlock
   if (content === '.unlock') {
     if (!isAdmin(message.author.id) && !member.permissions.has(PermissionFlagsBits.ManageChannels)) {
       return message.reply('❌ Bạn không có quyền mở khóa kênh!');
     }
     try {
       await channel.permissionOverwrites.edit(guild.roles.everyone, {
-        SendMessages: null,
-        AddReactions: null,
-        SendMessagesInThreads: null,
+        SendMessages: null, AddReactions: null, SendMessagesInThreads: null,
       });
       const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('🔓 Kênh đã được mở khóa')
+        .setColor(0x00FF00).setTitle('🔓 Kênh đã được mở khóa')
         .setDescription(`Kênh **#${channel.name}** đã được mở khóa bởi ${message.author}\nMọi người có thể nhắn tin bình thường!`)
         .setTimestamp();
       channel.send({ embeds: [embed] });
-    } catch (err) {
-      message.reply(`❌ Lỗi: ${err.message}`);
-    }
+    } catch (err) { message.reply(`❌ Lỗi: ${err.message}`); }
   }
 });
 
 // ===================== LOGIN =====================
 client.login(TOKEN);
+
