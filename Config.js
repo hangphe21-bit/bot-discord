@@ -22,7 +22,7 @@ module.exports = {
 
   // ── XP ────────────────────────────────────
   XP_PER_MESSAGE: { min: 15, max: 25 },
-  XP_COOLDOWN_MS: 60 * 1000, // 60 giây cooldown
+  XP_COOLDOWN_MS: 1 * 1000, // 60 giây cooldown
 
   // Thưởng role khi đạt level
   // Ví dụ: { 5: 'Member', 10: 'Active', 20: 'Legend' }
