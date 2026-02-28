@@ -95,20 +95,33 @@ const commands = [
 
   // /setrole — tạo panel role reaction
   new SlashCommandBuilder()
+    .setName('mute')
+    .setDescription('Cam user nhan tin (chi Admin)')
+    .addUserOption(opt => opt.setName('user').setDescription('User can mute').setRequired(true))
+    .addStringOption(opt => opt.setName('time').setDescription('Thoi gian VD: 10m, 1h, 2d').setRequired(true))
+    .addStringOption(opt => opt.setName('lydo').setDescription('Ly do mute').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('unmute')
+    .setDescription('Go mute user (chi Admin)')
+    .addUserOption(opt => opt.setName('user').setDescription('User can unmute').setRequired(true)),
+
+  new SlashCommandBuilder()
     .setName('setrole')
     .setDescription('Tao panel chon role bang nut bam (chi Admin)')
-    .addStringOption(opt => opt.setName('tieude').setDescription('Tiêu đề của panel VD: Chọn màu của bạn').setRequired(true))
-    .addStringOption(opt => opt.setName('mota').setDescription('Mô tả thêm (không bắt buộc)').setRequired(false))
-    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1').setRequired(true))
-    .addStringOption(opt => opt.setName('icon1').setDescription('Icon/emoji cho role 1 VD: 🔴').setRequired(true))
+    .addStringOption(opt => opt.setName('tieude').setDescription('Tieu de panel VD: Chon mau cua ban').setRequired(true))
+    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1 (bat buoc)').setRequired(true))
+    .addStringOption(opt => opt.setName('icon1').setDescription('Emoji cho role 1 VD: 🔴').setRequired(true))
     .addRoleOption(opt => opt.setName('role2').setDescription('Role 2').setRequired(false))
-    .addStringOption(opt => opt.setName('icon2').setDescription('Icon/emoji cho role 2').setRequired(false))
+    .addStringOption(opt => opt.setName('icon2').setDescription('Emoji cho role 2').setRequired(false))
     .addRoleOption(opt => opt.setName('role3').setDescription('Role 3').setRequired(false))
-    .addStringOption(opt => opt.setName('icon3').setDescription('Icon/emoji cho role 3').setRequired(false))
+    .addStringOption(opt => opt.setName('icon3').setDescription('Emoji cho role 3').setRequired(false))
     .addRoleOption(opt => opt.setName('role4').setDescription('Role 4').setRequired(false))
-    .addStringOption(opt => opt.setName('icon4').setDescription('Icon/emoji cho role 4').setRequired(false))
+    .addStringOption(opt => opt.setName('icon4').setDescription('Emoji cho role 4').setRequired(false))
     .addRoleOption(opt => opt.setName('role5').setDescription('Role 5').setRequired(false))
-    .addStringOption(opt => opt.setName('icon5').setDescription('Icon/emoji cho role 5').setRequired(false)),
+    .addStringOption(opt => opt.setName('icon5').setDescription('Emoji cho role 5').setRequired(false))
+    .addChannelOption(opt => opt.setName('kenh').setDescription('Kenh de bot gui panel role VD: #role').setRequired(false))
+    .addStringOption(opt => opt.setName('mota').setDescription('Mo ta them (khong bat buoc)').setRequired(false)),
 
 ].map(cmd => cmd.toJSON());
 
@@ -188,6 +201,8 @@ client.on('interactionCreate', async (interaction) => {
             '`/addrole [tên] [màu]` — 🎨 Tạo role mới',
             '`/clear [số lượng]` — 🧹 Xóa tin nhắn trong kênh',
             '`/setrole [tiêu đề] [role] [icon]...` — 🎭 Tạo panel chọn role',
+            '`/mute @user [time] [lý do]` — 🔇 Mute thành viên (10m/1h/2d)',
+            '`/unmute @user` — 🔊 Gỡ mute thành viên',
           ].join('\n'),
         }
       )
@@ -396,6 +411,99 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
+  // -------- /mute --------
+  if (commandName === 'mute') {
+    if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return interaction.reply({ content: '❌ Bạn không có quyền mute!', ephemeral: true });
+    }
+
+    const targetUser = interaction.options.getMember('user');
+    const timeStr    = interaction.options.getString('time');
+    const lydo       = interaction.options.getString('lydo') || 'Không có lý do';
+
+    if (!targetUser) {
+      return interaction.reply({ content: '❌ Không tìm thấy user!', ephemeral: true });
+    }
+
+    // Parse time: 10m, 1h, 2d, 1w
+    function parseTime(str) {
+      const match = str.match(/^(\d+)([smhdw])$/i);
+      if (!match) return null;
+      const val  = parseInt(match[1]);
+      const unit = match[2].toLowerCase();
+      const map  = { s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 };
+      return val * (map[unit] || 0);
+    }
+
+    const ms = parseTime(timeStr);
+    if (!ms || ms <= 0) {
+      return interaction.reply({ content: '❌ Thời gian không hợp lệ!\nVD: `10m` (10 phút), `1h` (1 giờ), `2d` (2 ngày)', ephemeral: true });
+    }
+
+    // Discord timeout tối đa 28 ngày
+    const MAX_MS = 28 * 24 * 60 * 60 * 1000;
+    if (ms > MAX_MS) {
+      return interaction.reply({ content: '❌ Tối đa chỉ được mute **28 ngày**!', ephemeral: true });
+    }
+
+    try {
+      await targetUser.timeout(ms, lydo);
+
+      // Format thời gian hiển thị
+      function formatTime(ms) {
+        const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60), d = Math.floor(h/24);
+        if (d > 0) return `${d} ngày`;
+        if (h > 0) return `${h} giờ`;
+        if (m > 0) return `${m} phút`;
+        return `${s} giây`;
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle('🔇 Đã Mute Thành Viên')
+        .addFields(
+          { name: '👤 Thành viên', value: `${targetUser.user}`, inline: true },
+          { name: '⏱️ Thời gian', value: formatTime(ms), inline: true },
+          { name: '📝 Lý do', value: lydo, inline: false },
+          { name: '🔓 Hết mute lúc', value: `<t:${Math.floor((Date.now()+ms)/1000)}:F>`, inline: false },
+        )
+        .setFooter({ text: `Thực hiện bởi ${user.tag}` })
+        .setTimestamp();
+
+      interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      interaction.reply({ content: `❌ Lỗi: ${err.message}\nBot cần quyền **Moderate Members** và role cao hơn user!`, ephemeral: true });
+    }
+  }
+
+  // -------- /unmute --------
+  if (commandName === 'unmute') {
+    if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return interaction.reply({ content: '❌ Bạn không có quyền unmute!', ephemeral: true });
+    }
+
+    const targetUser = interaction.options.getMember('user');
+    if (!targetUser) {
+      return interaction.reply({ content: '❌ Không tìm thấy user!', ephemeral: true });
+    }
+
+    if (!targetUser.communicationDisabledUntil) {
+      return interaction.reply({ content: `❌ **${targetUser.user.username}** không bị mute!`, ephemeral: true });
+    }
+
+    try {
+      await targetUser.timeout(null);
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🔊 Đã Unmute Thành Viên')
+        .setDescription(`${targetUser.user} đã được gỡ mute bởi ${user}`)
+        .setTimestamp();
+      interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      interaction.reply({ content: `❌ Lỗi: ${err.message}`, ephemeral: true });
+    }
+  }
+
   // -------- /setrole (tạo panel role) --------
   if (commandName === 'setrole') {
     if (!isAdmin(user.id) && !member.permissions.has(PermissionFlagsBits.ManageRoles)) {
@@ -441,10 +549,20 @@ client.on('interactionCreate', async (interaction) => {
       );
     });
 
-    await interaction.reply({
-      embeds: [embed],
-      components: [row]
-    });
+    // Kênh gửi panel (nếu có)
+    const targetChannel = interaction.options.getChannel('kenh') || channel;
+
+    try {
+      await targetChannel.send({ embeds: [embed], components: [row] });
+      // Nếu gửi sang kênh khác thì báo cho admin biết
+      if (targetChannel.id !== channel.id) {
+        await interaction.reply({ content: `✅ Đã gửi panel role sang ${targetChannel}!`, ephemeral: true });
+      } else {
+        await interaction.reply({ embeds: [embed], components: [row] });
+      }
+    } catch (err) {
+      interaction.reply({ content: `❌ Không thể gửi vào kênh đó! Kiểm tra quyền bot.\nLỗi: ${err.message}`, ephemeral: true });
+    }
   }
 });
 
@@ -484,6 +602,99 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
       channel.send({ embeds: [embed] });
     } catch (err) { message.reply(`❌ Lỗi: ${err.message}`); }
+  }
+
+  // .mute @user [time] [lý do]
+  if (content.startsWith('.mute ')) {
+    if (!isAdmin(message.author.id) && !member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return message.reply('❌ Bạn không có quyền mute!');
+    }
+
+    const args = content.split(/\s+/);
+    // args[0] = .mute, args[1] = @user, args[2] = time, args[3...] = lý do
+    const mentionId = args[1]?.replace(/[<@!>]/g, '');
+    const timeStr   = args[2];
+    const lydo      = args.slice(3).join(' ') || 'Không có lý do';
+
+    if (!mentionId || !timeStr) {
+      return message.reply('❌ Cú pháp: `.mute @user [time] [lý do]`\nVD: `.mute @NaNaNa 10m Spam`');
+    }
+
+    function parseTime(str) {
+      const match = str.match(/^(\d+)([smhdw])$/i);
+      if (!match) return null;
+      const val = parseInt(match[1]);
+      const unit = match[2].toLowerCase();
+      const map = { s:1000, m:60000, h:3600000, d:86400000, w:604800000 };
+      return val * (map[unit] || 0);
+    }
+
+    function formatTime(ms) {
+      const s=Math.floor(ms/1000), m=Math.floor(s/60), h=Math.floor(m/60), d=Math.floor(h/24);
+      if (d>0) return `${d} ngày`;
+      if (h>0) return `${h} giờ`;
+      if (m>0) return `${m} phút`;
+      return `${s} giây`;
+    }
+
+    const ms = parseTime(timeStr);
+    if (!ms) return message.reply('❌ Thời gian không hợp lệ! VD: `10m`, `1h`, `2d`');
+
+    const MAX_MS = 28 * 24 * 60 * 60 * 1000;
+    if (ms > MAX_MS) return message.reply('❌ Tối đa chỉ được mute **28 ngày**!');
+
+    try {
+      const targetMember = await guild.members.fetch(mentionId).catch(() => null);
+      if (!targetMember) return message.reply('❌ Không tìm thấy user!');
+
+      await targetMember.timeout(ms, lydo);
+
+      const embed = new EmbedBuilder()
+        .setColor(0xFF6600)
+        .setTitle('🔇 Đã Mute Thành Viên')
+        .addFields(
+          { name: '👤 Thành viên', value: `${targetMember.user}`, inline: true },
+          { name: '⏱️ Thời gian', value: formatTime(ms), inline: true },
+          { name: '📝 Lý do', value: lydo, inline: false },
+          { name: '🔓 Hết mute lúc', value: `<t:${Math.floor((Date.now()+ms)/1000)}:F>`, inline: false },
+        )
+        .setFooter({ text: `Thực hiện bởi ${message.author.tag}` })
+        .setTimestamp();
+
+      message.reply({ embeds: [embed] });
+    } catch (err) {
+      message.reply(`❌ Lỗi: ${err.message}\nBot cần quyền **Moderate Members** và role cao hơn user!`);
+    }
+  }
+
+  // .unmute @user
+  if (content.startsWith('.unmute ')) {
+    if (!isAdmin(message.author.id) && !member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return message.reply('❌ Bạn không có quyền unmute!');
+    }
+
+    const args = content.split(/\s+/);
+    const mentionId = args[1]?.replace(/[<@!>]/g, '');
+    if (!mentionId) return message.reply('❌ Cú pháp: `.unmute @user`');
+
+    try {
+      const targetMember = await guild.members.fetch(mentionId).catch(() => null);
+      if (!targetMember) return message.reply('❌ Không tìm thấy user!');
+
+      if (!targetMember.communicationDisabledUntil) {
+        return message.reply(`❌ **${targetMember.user.username}** không bị mute!`);
+      }
+
+      await targetMember.timeout(null);
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🔊 Đã Unmute Thành Viên')
+        .setDescription(`${targetMember.user} đã được gỡ mute bởi ${message.author}`)
+        .setTimestamp();
+      message.reply({ embeds: [embed] });
+    } catch (err) {
+      message.reply(`❌ Lỗi: ${err.message}`);
+    }
   }
 
   // .unlock
